@@ -9,8 +9,9 @@
   <!-- Standalone Mobile Manifest Rules -->
   <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22ArcGIS%20Real-Time%20Flight%20Tracker%22%2C%22short_name%22%3A%22FlightPWA%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%2311111b%22%2C%22theme_color%22%3A%22%2311111b%22%7D" />
 
-  <!-- FIXED: Official single CDN engine for maps components (sets up global maps namespace) -->
-  <script type="module" src="https://js.arcgis.com/4.33/"></script>
+  <!-- FIXED: Standard CSS and Script Assets loaded without module restrictions -->
+  <link rel="stylesheet" href="https://arcgis.com" />
+  <script src="https://arcgis.com"></script>
 
   <style>
     :root { 
@@ -39,7 +40,7 @@
       box-shadow: 5px 0 15px rgba(0,0,0,0.5); 
     }
     
-    arcgis-map { flex: 1; height: 100%; background: #181825; }
+    #viewDiv { flex: 1; height: 100%; background: #181825; }
     
     .header-title { margin: 0; color: white; font-size: 20px; font-weight: 700; }
     .status-badge { 
@@ -66,7 +67,7 @@
     @media (max-width: 768px) { 
       body { flex-direction: column-reverse; } 
       #sidebar { width: 100%; height: 45%; border-right: none; border-top: 1px solid var(--border-color); } 
-      arcgis-map { height: 55%; } 
+      #viewDiv { height: 55%; } 
     }
   </style>
 </head>
@@ -85,53 +86,68 @@
     <div id="logConsole">Connecting to pipeline channels...</div>
   </div>
 
-  <arcgis-map id="mapElement" basemap="dark-gray-vector" center="-118.2437, 34.0522" zoom="10"></arcgis-map>
+  <!-- FIXED: Changed custom element tag to standard div container to prevent initialization races -->
+  <div id="viewDiv"></div>
 
-  <script type="module">
-    const arcgisMapComponent = document.getElementById("mapElement");
-    const statusNode = document.getElementById("connectionStatus");
-
-    // Listen to when the web component architecture map view is built
-    arcgisMapComponent.addEventListener("arcgisViewReadyChange", async (event) => {
-      const view = event.target.view;
-      const endpoint = document.getElementById("streamUrl").value;
+  <script>
+    // FIXED: Using standard require syntax to completely solve script timing/loading errors
+    require([
+      "esri/Map",
+      "esri/views/MapView",
+      "esri/layers/StreamLayer"
+    ], function(Map, MapView, StreamLayer) {
       
-      try {
-        // FIXED: Using standard built-in global loader fallback for CDN maps packages
-        // This stops the relative path module compilation errors instantly
-        const [StreamLayer] = await $arcgisImport(["esri/layers/StreamLayer"]);
+      const statusNode = document.getElementById("connectionStatus");
+      const endpoint = document.getElementById("streamUrl").value;
 
-        // Instantiate the layer using the imported class object module mapping
-        const streamLayer = new StreamLayer({
-          url: endpoint,
-          purgeOptions: { displayCount: 200 }
-        });
+      // 1. Initialize Map
+      const map = new Map({
+        basemap: "dark-gray-vector"
+      });
 
-        view.map.add(streamLayer);
+      // 2. Initialize MapView targeting the container div
+      const view = new MapView({
+        container: "viewDiv",
+        map: map,
+        center: [-118.2437, 34.0522],
+        zoom: 10
+      });
 
-        const layerView = await view.whenLayerView(streamLayer);
-        
-        statusNode.innerText = "🟢 SERVER CONNECTED";
-        statusNode.style.color = "var(--green)";
-        log("WebSocket active channel pipeline initialized successfully.", "log-success");
+      // 3. Setup Stream Layer once view loads
+      view.when(async () => {
+        try {
+          const streamLayer = new StreamLayer({
+            url: endpoint,
+            purgeOptions: { displayCount: 200 }
+          });
 
-        layerView.on("data-received", (dataEvent) => {
-          const attributes = dataEvent.attributes;
-          const timestamp = new Date().toLocaleTimeString();
+          view.map.add(streamLayer);
+
+          const layerView = await view.whenLayerView(streamLayer);
           
-          const flightNum = attributes.id || attributes.FLIGHT_NUM || "UNK-ID";
-          const speed = attributes.speed ? `${attributes.speed} mph` : "0 mph";
-          const route = attributes.route_id || "Route Vector";
+          statusNode.innerText = "🟢 SERVER CONNECTED";
+          statusNode.style.color = "var(--green)";
+          log("WebSocket active channel pipeline initialized successfully.", "log-success");
 
-          log(`[${timestamp}] 📡 Entity #${flightNum} (${route}) speed: ${speed}`, "log-success");
-        });
+          // 4. Capture Streaming WebSocket Packets
+          layerView.on("data-received", (dataEvent) => {
+            const attributes = dataEvent.attributes;
+            const timestamp = new Date().toLocaleTimeString();
+            
+            const entityId = attributes.id || attributes.FLIGHT_NUM || "UNK-ID";
+            const speed = attributes.speed ? `${attributes.speed} mph` : "0 mph";
+            const route = attributes.route_id || "Route Vector";
 
-      } catch (error) {
-        statusNode.innerText = "🔴 DISCONNECTED";
-        statusNode.style.color = "var(--red)";
-        log(`Handshake Stream Failure: ${error.message}`, "log-error");
-        console.error(error);
-      }
+            log(`[${timestamp}] 📡 Entity #${entityId} (${route}) speed: ${speed}`, "log-success");
+          });
+
+        } catch (error) {
+          statusNode.innerText = "🔴 DISCONNECTED";
+          statusNode.style.color = "var(--red)";
+          log(`Handshake Stream Failure: ${error.message}`, "log-error");
+          console.error(error);
+        }
+      });
     });
 
     function log(message, styleClass = "") {
