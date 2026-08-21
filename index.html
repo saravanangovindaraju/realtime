@@ -9,8 +9,8 @@
   <!-- Standalone Mobile Manifest Rules -->
   <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22ArcGIS%20Real-Time%20Flight%20Tracker%22%2C%22short_name%22%3A%22FlightPWA%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%2311111b%22%2C%22theme_color%22%3A%22%2311111b%22%7D" />
 
-  <!-- FIXED: Standard singular CDN loader endpoint for modern web map components -->
-  <script type="module" src="https://arcgis.com"></script>
+  <!-- FIXED: Official single CDN engine for maps components (sets up global maps namespace) -->
+  <script type="module" src="https://js.arcgis.com/4.33/"></script>
 
   <style>
     :root { 
@@ -91,16 +91,17 @@
     const arcgisMapComponent = document.getElementById("mapElement");
     const statusNode = document.getElementById("connectionStatus");
 
-    // FIXED: Using $arcgis.import() promise engine to securely load modules from Esri's CDN configuration
+    // Listen to when the web component architecture map view is built
     arcgisMapComponent.addEventListener("arcgisViewReadyChange", async (event) => {
       const view = event.target.view;
       const endpoint = document.getElementById("streamUrl").value;
       
       try {
-        // Resolve StreamLayer dynamically from the global scope utility
-        const [StreamLayer] = await $arcgis.import(["@arcgis/core/layers/StreamLayer"]);
+        // FIXED: Using standard built-in global loader fallback for CDN maps packages
+        // This stops the relative path module compilation errors instantly
+        const [StreamLayer] = await $arcgisImport(["esri/layers/StreamLayer"]);
 
-        // Instantiate the layer using the imported object mapping
+        // Instantiate the layer using the imported class object module mapping
         const streamLayer = new StreamLayer({
           url: endpoint,
           purgeOptions: { displayCount: 200 }
