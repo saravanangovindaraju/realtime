@@ -9,11 +9,8 @@
   <!-- Standalone Mobile Manifest Rules -->
   <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22ArcGIS%20Real-Time%20Flight%20Tracker%22%2C%22short_name%22%3A%22FlightPWA%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%2311111b%22%2C%22theme_color%22%3A%22%2311111b%22%7D" />
 
-  <!-- FIXED: Loaded modern ArcGIS Web Components via dedicated ://arcgis.com module CDN -->
-  <script type="module" src="https://://arcgis.com/4.30/@arcgis/core/components/arcgis-map/arcgis-map.js"></script>
-
-  <!-- FIXED: Core Dark Theme Stylesheet Asset Layout -->
-  <link rel="stylesheet" href="https://://arcgis.com/4.30/@arcgis/core/assets/esri/themes/dark/main.css" />
+  <!-- FIXED: Standard singular CDN loader endpoint for modern web map components -->
+  <script type="module" src="https://arcgis.com"></script>
 
   <style>
     :root { 
@@ -42,7 +39,6 @@
       box-shadow: 5px 0 15px rgba(0,0,0,0.5); 
     }
     
-    /* Native Custom Element Wrapper target sizing */
     arcgis-map { flex: 1; height: 100%; background: #181825; }
     
     .header-title { margin: 0; color: white; font-size: 20px; font-weight: 700; }
@@ -82,37 +78,34 @@
     
     <div class="form-group">
       <label>WebSocket Stream Endpoint</label>
-      <!-- NOTE: Swap this test URL out with a valid StreamServer endpoint to visualize live positions -->
       <input type="text" id="streamUrl" class="input-field" value="https://esri.com" />
     </div>
 
     <label>Real-Time Telemetry Feed</label>
-    <div id="logConsole">Bypassing require validation framework structures...</div>
+    <div id="logConsole">Connecting to pipeline channels...</div>
   </div>
 
-  <!-- Standard Custom HTML Element instantly handles canvas rendering without scripts -->
   <arcgis-map id="mapElement" basemap="dark-gray-vector" center="-118.2437, 34.0522" zoom="10"></arcgis-map>
 
   <script type="module">
-    // FIXED: Imported from the absolute JS API build path instead of root domain
-    import StreamLayer from "https://://arcgis.com/4.30/@arcgis/core/layers/StreamLayer.js";
-
     const arcgisMapComponent = document.getElementById("mapElement");
     const statusNode = document.getElementById("connectionStatus");
 
-    // Listen to the custom element readiness payload hook event
+    // FIXED: Using $arcgis.import() promise engine to securely load modules from Esri's CDN configuration
     arcgisMapComponent.addEventListener("arcgisViewReadyChange", async (event) => {
       const view = event.target.view;
       const endpoint = document.getElementById("streamUrl").value;
       
       try {
-        // Instantiate the StreamLayer tracking vectors
+        // Resolve StreamLayer dynamically from the global scope utility
+        const [StreamLayer] = await $arcgis.import(["@arcgis/core/layers/StreamLayer"]);
+
+        // Instantiate the layer using the imported object mapping
         const streamLayer = new StreamLayer({
           url: endpoint,
           purgeOptions: { displayCount: 200 }
         });
 
-        // Add layer using the native Web Component architecture map view instance
         view.map.add(streamLayer);
 
         const layerView = await view.whenLayerView(streamLayer);
@@ -121,16 +114,15 @@
         statusNode.style.color = "var(--green)";
         log("WebSocket active channel pipeline initialized successfully.", "log-success");
 
-        // Parse incoming network packets
         layerView.on("data-received", (dataEvent) => {
           const attributes = dataEvent.attributes;
           const timestamp = new Date().toLocaleTimeString();
           
           const flightNum = attributes.id || attributes.FLIGHT_NUM || "UNK-ID";
           const speed = attributes.speed ? `${attributes.speed} mph` : "0 mph";
-          const route = attributes.route_id || "Standard Route";
+          const route = attributes.route_id || "Route Vector";
 
-          log(`[${timestamp}] 📡 Entity #${flightNum} (${route}) traveling at ${speed}`, "log-success");
+          log(`[${timestamp}] 📡 Entity #${flightNum} (${route}) speed: ${speed}`, "log-success");
         });
 
       } catch (error) {
