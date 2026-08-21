@@ -9,13 +9,11 @@
   <!-- Standalone Mobile Manifest Rules -->
   <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22ArcGIS%20Real-Time%20Flight%20Tracker%22%2C%22short_name%22%3A%22FlightPWA%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%2311111b%22%2C%22theme_color%22%3A%22%2311111b%22%7D" />
 
-  <!-- Load modern ArcGIS Custom Component Assets via standard JS modules -->
-  <script type="module" src="https://arcgis.com"></script>
-  <script type="module" src="https://arcgis.com"></script>
-  <script type="module" src="https://arcgis.com"></script>
+  <!-- FIXED: Loaded modern ArcGIS Web Components via dedicated ://arcgis.com module CDN -->
+  <script type="module" src="https://://arcgis.com/4.30/@arcgis/core/components/arcgis-map/arcgis-map.js"></script>
 
-  <!-- ArcGIS Core Stylesheet Asset Layout -->
-  <link rel="stylesheet" href="https://arcgis.com" />
+  <!-- FIXED: Core Dark Theme Stylesheet Asset Layout -->
+  <link rel="stylesheet" href="https://://arcgis.com/4.30/@arcgis/core/assets/esri/themes/dark/main.css" />
 
   <style>
     :root { 
@@ -84,26 +82,28 @@
     
     <div class="form-group">
       <label>WebSocket Stream Endpoint</label>
-      <input type="text" id="streamUrl" class="input-field" readonly value="https://esri.com" />
+      <!-- NOTE: Swap this test URL out with a valid StreamServer endpoint to visualize live positions -->
+      <input type="text" id="streamUrl" class="input-field" value="https://esri.com" />
     </div>
 
     <label>Real-Time Telemetry Feed</label>
     <div id="logConsole">Bypassing require validation framework structures...</div>
   </div>
 
-  <!-- FIXED: Standard Custom HTML Element instantly handles canvas rendering without scripts -->
-  <arcgis-map id="mapElement" basemap="dark-gray-vector" center="-98.5795, 39.8283" zoom="4"></arcgis-map>
+  <!-- Standard Custom HTML Element instantly handles canvas rendering without scripts -->
+  <arcgis-map id="mapElement" basemap="dark-gray-vector" center="-118.2437, 34.0522" zoom="10"></arcgis-map>
 
   <script type="module">
-    import StreamLayer from "https://arcgis.com";
+    // FIXED: Imported from the absolute JS API build path instead of root domain
+    import StreamLayer from "https://://arcgis.com/4.30/@arcgis/core/layers/StreamLayer.js";
 
     const arcgisMapComponent = document.getElementById("mapElement");
     const statusNode = document.getElementById("connectionStatus");
-    const endpoint = document.getElementById("streamUrl").value;
 
     // Listen to the custom element readiness payload hook event
     arcgisMapComponent.addEventListener("arcgisViewReadyChange", async (event) => {
       const view = event.target.view;
+      const endpoint = document.getElementById("streamUrl").value;
       
       try {
         // Instantiate the StreamLayer tracking vectors
@@ -126,17 +126,18 @@
           const attributes = dataEvent.attributes;
           const timestamp = new Date().toLocaleTimeString();
           
-          const flightNum = attributes.FLIGHT_NUM || "UNK-FLT";
-          const altitude = attributes.ALTITUDE ? `${attributes.ALTITUDE} ft` : "0 ft";
-          const aircraft = attributes.AIRCRAFT_TYPE || "Standard Courier";
+          const flightNum = attributes.id || attributes.FLIGHT_NUM || "UNK-ID";
+          const speed = attributes.speed ? `${attributes.speed} mph` : "0 mph";
+          const route = attributes.route_id || "Standard Route";
 
-          log(`[${timestamp}] ✈️ ${flightNum} (${aircraft}) at ${altitude}`, "log-success");
+          log(`[${timestamp}] 📡 Entity #${flightNum} (${route}) traveling at ${speed}`, "log-success");
         });
 
       } catch (error) {
         statusNode.innerText = "🔴 DISCONNECTED";
         statusNode.style.color = "var(--red)";
         log(`Handshake Stream Failure: ${error.message}`, "log-error");
+        console.error(error);
       }
     });
 
