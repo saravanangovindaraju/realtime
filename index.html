@@ -9,7 +9,15 @@
   <!-- Standalone Mobile Manifest Rules -->
   <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22ArcGIS%20Real-Time%20Flight%20Tracker%22%2C%22short_name%22%3A%22FlightPWA%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%2311111b%22%2C%22theme_color%22%3A%22%2311111b%22%7D" />
 
-  <!-- FIXED: Standard CSS and Script Assets loaded without module restrictions -->
+  <!-- FIXED STEP 1: Global Dojo/Esri configuration object telling the loader exactly where the CDN resources are -->
+  <script>
+    var dojoConfig = {
+      async: true,
+      baseUrl: "https://arcgis.com"
+    };
+  </script>
+
+  <!-- FIXED STEP 2: Explicitly load global core stylesheets and scripts via full paths -->
   <link rel="stylesheet" href="https://arcgis.com" />
   <script src="https://arcgis.com"></script>
 
@@ -86,11 +94,10 @@
     <div id="logConsole">Connecting to pipeline channels...</div>
   </div>
 
-  <!-- FIXED: Changed custom element tag to standard div container to prevent initialization races -->
   <div id="viewDiv"></div>
 
   <script>
-    // FIXED: Using standard require syntax to completely solve script timing/loading errors
+    // FIXED STEP 3: Modules are loaded using full paths relative to the global baseUrl config explicitly mapped above
     require([
       "esri/Map",
       "esri/views/MapView",
@@ -100,12 +107,10 @@
       const statusNode = document.getElementById("connectionStatus");
       const endpoint = document.getElementById("streamUrl").value;
 
-      // 1. Initialize Map
       const map = new Map({
         basemap: "dark-gray-vector"
       });
 
-      // 2. Initialize MapView targeting the container div
       const view = new MapView({
         container: "viewDiv",
         map: map,
@@ -113,7 +118,6 @@
         zoom: 10
       });
 
-      // 3. Setup Stream Layer once view loads
       view.when(async () => {
         try {
           const streamLayer = new StreamLayer({
@@ -129,7 +133,6 @@
           statusNode.style.color = "var(--green)";
           log("WebSocket active channel pipeline initialized successfully.", "log-success");
 
-          // 4. Capture Streaming WebSocket Packets
           layerView.on("data-received", (dataEvent) => {
             const attributes = dataEvent.attributes;
             const timestamp = new Date().toLocaleTimeString();
