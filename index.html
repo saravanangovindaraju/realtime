@@ -9,8 +9,10 @@
   <!-- Inline Manifest for Standalone PWA Installation -->
   <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22ArcGIS%20Real-Time%20Flight%20Tracker%22%2C%22short_name%22%3A%22FlightPWA%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%2311111b%22%2C%22theme_color%22%3A%22%2311111b%22%7D" />
 
-  <!-- ArcGIS Maps SDK Theme and CDN Assets -->
+  <!-- Official ArcGIS CSS Stylesheet Theme Asset -->
   <link rel="stylesheet" href="https://arcgis.com" />
+  
+  <!-- Unified Global Browser Bundle Script Loader (Safe for GitHub Pages MIME policies) -->
   <script src="https://arcgis.com"></script>
 
   <style>
@@ -64,7 +66,6 @@
     .log-success { color: var(--green); }
     .log-error { color: var(--red); }
     
-    /* Responsive stacking for mobile displays */
     @media (max-width: 768px) { 
       body { flex-direction: column-reverse; } 
       #sidebar { width: 100%; height: 45%; border-right: none; border-top: 1px solid var(--border-color); } 
@@ -90,17 +91,21 @@
   <div id="viewDiv"></div>
 
   <script>
-    let map, view, streamLayer;
-    const statusNode = document.getElementById("connectionStatus");
+    // Using global AMD configuration wrapper to bypass strict GitHub environment module validation
+    require([
+      "esri/Map",
+      "esri/views/MapView",
+      "esri/layers/StreamLayer"
+    ], function(Map, MapView, StreamLayer) {
 
-    require(["esri/Map", "esri/views/MapView", "esri/layers/StreamLayer"], function(Map, MapView, StreamLayer) {
-      
+      let map, view, streamLayer;
+      const statusNode = document.getElementById("connectionStatus");
       const endpoint = document.getElementById("streamUrl").value;
 
       // 1. Initialize StreamLayer connecting to Esri's live FAA feed
       streamLayer = new StreamLayer({
         url: endpoint,
-        purgeOptions: { displayCount: 250 } // Keep browser memory footprint clean
+        purgeOptions: { displayCount: 250 }
       });
 
       // 2. Set up Map container using a Dark UI canvas vector basemap
@@ -117,11 +122,11 @@
         center: [-98.5795, 39.8283]
       });
 
-      // 4. Hook into the data flow pipe when the view goes active
+      // 4. Hook into data pipelines on layout readiness states
       view.whenLayerView(streamLayer).then((layerView) => {
         statusNode.innerText = "🟢 SERVER CONNECTED";
         statusNode.style.color = "var(--green)";
-        log("WebSocket socket linked to FAA Flight stream successfully.", "log-success");
+        log("WebSocket link to FAA Flight stream resolved successfully.", "log-success");
 
         // Event listener hooks into the live network packet frames
         layerView.on("data-received", (event) => {
@@ -149,7 +154,7 @@
       consoleNode.innerHTML = wrapper + consoleNode.innerHTML;
     }
 
-    // Passive Service Worker registration for PWA home-screen app criteria matching
+    // Passive Service Worker registration for PWA home-screen matching criteria
     if ('serviceWorker' in navigator) {
       const swBlobCode = `self.addEventListener('fetch', function(e){});`;
       const blobInstance = new Blob([swBlobCode], { type: 'application/javascript' });
