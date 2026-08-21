@@ -6,14 +6,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#11111b" />
   
-  <!-- Inline Manifest for Standalone PWA Installation -->
+  <!-- Standalone Mobile Manifest Rules -->
   <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22ArcGIS%20Real-Time%20Flight%20Tracker%22%2C%22short_name%22%3A%22FlightPWA%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%2311111b%22%2C%22theme_color%22%3A%22%2311111b%22%7D" />
 
-  <!-- Official ArcGIS CSS Stylesheet Theme Asset -->
+  <!-- Load modern ArcGIS Custom Component Assets via standard JS modules -->
+  <script type="module" src="https://arcgis.com"></script>
+  <script type="module" src="https://arcgis.com"></script>
+  <script type="module" src="https://arcgis.com"></script>
+
+  <!-- ArcGIS Core Stylesheet Asset Layout -->
   <link rel="stylesheet" href="https://arcgis.com" />
-  
-  <!-- Unified Global Browser Bundle Script Loader (Safe for GitHub Pages MIME policies) -->
-  <script src="https://arcgis.com"></script>
 
   <style>
     :root { 
@@ -42,7 +44,8 @@
       box-shadow: 5px 0 15px rgba(0,0,0,0.5); 
     }
     
-    #viewDiv { flex: 1; height: 100%; background: #181825; }
+    /* Native Custom Element Wrapper target sizing */
+    arcgis-map { flex: 1; height: 100%; background: #181825; }
     
     .header-title { margin: 0; color: white; font-size: 20px; font-weight: 700; }
     .status-badge { 
@@ -69,7 +72,7 @@
     @media (max-width: 768px) { 
       body { flex-direction: column-reverse; } 
       #sidebar { width: 100%; height: 45%; border-right: none; border-top: 1px solid var(--border-color); } 
-      #viewDiv { height: 55%; } 
+      arcgis-map { height: 55%; } 
     }
   </style>
 </head>
@@ -77,7 +80,7 @@
 
   <div id="sidebar">
     <h1 class="header-title">📡 Live WebSocket PWA</h1>
-    <div id="connectionStatus" class="status-badge">🔄 INITIALIZING SDK...</div>
+    <div id="connectionStatus" class="status-badge">🔄 CONNECTING...</div>
     
     <div class="form-group">
       <label>WebSocket Stream Endpoint</label>
@@ -85,76 +88,64 @@
     </div>
 
     <label>Real-Time Telemetry Feed</label>
-    <div id="logConsole">Connecting handshake layers to server...</div>
+    <div id="logConsole">Bypassing require validation framework structures...</div>
   </div>
 
-  <div id="viewDiv"></div>
+  <!-- FIXED: Standard Custom HTML Element instantly handles canvas rendering without scripts -->
+  <arcgis-map id="mapElement" basemap="dark-gray-vector" center="-98.5795, 39.8283" zoom="4"></arcgis-map>
 
-  <script>
-    // Using global AMD configuration wrapper to bypass strict GitHub environment module validation
-    require([
-      "esri/Map",
-      "esri/views/MapView",
-      "esri/layers/StreamLayer"
-    ], function(Map, MapView, StreamLayer) {
+  <script type="module">
+    import StreamLayer from "https://arcgis.com";
 
-      let map, view, streamLayer;
-      const statusNode = document.getElementById("connectionStatus");
-      const endpoint = document.getElementById("streamUrl").value;
+    const arcgisMapComponent = document.getElementById("mapElement");
+    const statusNode = document.getElementById("connectionStatus");
+    const endpoint = document.getElementById("streamUrl").value;
 
-      // 1. Initialize StreamLayer connecting to Esri's live FAA feed
-      streamLayer = new StreamLayer({
-        url: endpoint,
-        purgeOptions: { displayCount: 250 }
-      });
+    // Listen to the custom element readiness payload hook event
+    arcgisMapComponent.addEventListener("arcgisViewReadyChange", async (event) => {
+      const view = event.target.view;
+      
+      try {
+        // Instantiate the StreamLayer tracking vectors
+        const streamLayer = new StreamLayer({
+          url: endpoint,
+          purgeOptions: { displayCount: 200 }
+        });
 
-      // 2. Set up Map container using a Dark UI canvas vector basemap
-      map = new Map({
-        basemap: "dark-gray-vector",
-        layers: [streamLayer]
-      });
+        // Add layer using the native Web Component architecture map view instance
+        view.map.add(streamLayer);
 
-      // 3. Mount View coordinates pinned over continental United States
-      view = new MapView({
-        container: "viewDiv",
-        map: map,
-        zoom: 4,
-        center: [-98.5795, 39.8283]
-      });
-
-      // 4. Hook into data pipelines on layout readiness states
-      view.whenLayerView(streamLayer).then((layerView) => {
+        const layerView = await view.whenLayerView(streamLayer);
+        
         statusNode.innerText = "🟢 SERVER CONNECTED";
         statusNode.style.color = "var(--green)";
-        log("WebSocket link to FAA Flight stream resolved successfully.", "log-success");
+        log("WebSocket active channel pipeline initialized successfully.", "log-success");
 
-        // Event listener hooks into the live network packet frames
-        layerView.on("data-received", (event) => {
-          const data = event.attributes;
+        // Parse incoming network packets
+        layerView.on("data-received", (dataEvent) => {
+          const attributes = dataEvent.attributes;
           const timestamp = new Date().toLocaleTimeString();
           
-          const flightNum = data.FLIGHT_NUM || "UNK-FLT";
-          const altitude = data.ALTITUDE ? `${data.ALTITUDE} ft` : "0 ft";
-          const aircraft = data.AIRCRAFT_TYPE || "Private";
+          const flightNum = attributes.FLIGHT_NUM || "UNK-FLT";
+          const altitude = attributes.ALTITUDE ? `${attributes.ALTITUDE} ft` : "0 ft";
+          const aircraft = attributes.AIRCRAFT_TYPE || "Standard Courier";
 
           log(`[${timestamp}] ✈️ ${flightNum} (${aircraft}) at ${altitude}`, "log-success");
         });
-        
-      }).catch((err) => {
+
+      } catch (error) {
         statusNode.innerText = "🔴 DISCONNECTED";
         statusNode.style.color = "var(--red)";
-        log(`WebSocket Handshake Error: ${err.message}`, "log-error");
-      });
+        log(`Handshake Stream Failure: ${error.message}`, "log-error");
+      }
     });
 
-    // Logging helper tool
     function log(message, styleClass = "") {
       const consoleNode = document.getElementById("logConsole");
       const wrapper = `<span class="log-entry ${styleClass}">${message}</span>`;
       consoleNode.innerHTML = wrapper + consoleNode.innerHTML;
     }
 
-    // Passive Service Worker registration for PWA home-screen matching criteria
     if ('serviceWorker' in navigator) {
       const swBlobCode = `self.addEventListener('fetch', function(e){});`;
       const blobInstance = new Blob([swBlobCode], { type: 'application/javascript' });
