@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ArcGIS Live Flight PWA</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#11111b" />
+  
+  <!-- Inline Manifest for Standalone PWA Installation -->
+  <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22ArcGIS%20Real-Time%20Flight%20Tracker%22%2C%22short_name%22%3A%22FlightPWA%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%2311111b%22%2C%22theme_color%22%3A%22%2311111b%22%7D" />
+
+  <!-- ArcGIS Maps SDK Theme and CDN Assets -->
+  <link rel="stylesheet" href="https://arcgis.com" />
+  <script src="https://arcgis.com"></script>
+
+  <style>
+    :root { 
+      --bg-dark: #11111b; 
+      --panel-bg: #1e1e2e; 
+      --border-color: #313244;
+      --text-main: #cdd6f4;
+      --text-muted: #a6adc8;
+      --accent: #b4befe;
+      --green: #a6e3a1; 
+      --red: #f38ba8; 
+    }
+    
+    html, body { 
+      padding: 0; margin: 0; height: 100%; width: 100%; 
+      display: flex; background: var(--bg-dark); 
+      color: var(--text-main); font-family: system-ui, -apple-system, sans-serif; 
+      overflow: hidden; 
+    }
+    
+    #sidebar { 
+      width: 350px; background: var(--panel-bg); 
+      padding: 20px; box-sizing: border-box; 
+      display: flex; flex-direction: column; gap: 15px; 
+      border-right: 1px solid var(--border-color); z-index: 10; 
+      box-shadow: 5px 0 15px rgba(0,0,0,0.5); 
+    }
+    
+    #viewDiv { flex: 1; height: 100%; background: #181825; }
+    
+    .header-title { margin: 0; color: white; font-size: 20px; font-weight: 700; }
+    .status-badge { 
+      padding: 6px 12px; background: #313244; border-radius: 20px; 
+      font-size: 11px; font-weight: bold; width: fit-content;
+      color: var(--accent); border: 1px solid var(--border-color);
+    }
+    
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); font-weight: bold; }
+    .input-field { padding: 12px; background: #11111b; border: 1px solid var(--border-color); border-radius: 8px; color: white; font-size: 12px; font-family: monospace; }
+    
+    #logConsole { 
+      flex: 1; background: #11111b; padding: 12px; 
+      border-radius: 8px; font-family: monospace; font-size: 11px; 
+      overflow-y: auto; white-space: pre-wrap; 
+      border: 1px solid var(--border-color); line-height: 1.6; 
+    }
+    
+    .log-entry { margin-bottom: 4px; display: block; }
+    .log-success { color: var(--green); }
+    .log-error { color: var(--red); }
+    
+    /* Responsive stacking for mobile displays */
+    @media (max-width: 768px) { 
+      body { flex-direction: column-reverse; } 
+      #sidebar { width: 100%; height: 45%; border-right: none; border-top: 1px solid var(--border-color); } 
+      #viewDiv { height: 55%; } 
+    }
+  </style>
+</head>
+<body>
+
+  <div id="sidebar">
+    <h1 class="header-title">📡 Live WebSocket PWA</h1>
+    <div id="connectionStatus" class="status-badge">🔄 INITIALIZING SDK...</div>
+    
+    <div class="form-group">
+      <label>WebSocket Stream Endpoint</label>
+      <input type="text" id="streamUrl" class="input-field" readonly value="https://esri.com" />
+    </div>
+
+    <label>Real-Time Telemetry Feed</label>
+    <div id="logConsole">Connecting handshake layers to server...</div>
+  </div>
+
+  <div id="viewDiv"></div>
+
+  <script>
+    let map, view, streamLayer;
+    const statusNode = document.getElementById("connectionStatus");
+
+    require(["esri/Map", "esri/views/MapView", "esri/layers/StreamLayer"], function(Map, MapView, StreamLayer) {
+      
+      const endpoint = document.getElementById("streamUrl").value;
+
+      // 1. Initialize StreamLayer connecting to Esri's live FAA feed
+      streamLayer = new StreamLayer({
+        url: endpoint,
+        purgeOptions: { displayCount: 250 } // Keep browser memory footprint clean
+      });
+
+      // 2. Set up Map container using a Dark UI canvas vector basemap
+      map = new Map({
+        basemap: "dark-gray-vector",
+        layers: [streamLayer]
+      });
+
+      // 3. Mount View coordinates pinned over continental United States
+      view = new MapView({
+        container: "viewDiv",
+        map: map,
+        zoom: 4,
+        center: [-98.5795, 39.8283]
+      });
+
+      // 4. Hook into the data flow pipe when the view goes active
+      view.whenLayerView(streamLayer).then((layerView) => {
+        statusNode.innerText = "🟢 SERVER CONNECTED";
+        statusNode.style.color = "var(--green)";
+        log("WebSocket socket linked to FAA Flight stream successfully.", "log-success");
+
+        // Event listener hooks into the live network packet frames
+        layerView.on("data-received", (event) => {
+          const data = event.attributes;
+          const timestamp = new Date().toLocaleTimeString();
+          
+          const flightNum = data.FLIGHT_NUM || "UNK-FLT";
+          const altitude = data.ALTITUDE ? `${data.ALTITUDE} ft` : "0 ft";
+          const aircraft = data.AIRCRAFT_TYPE || "Private";
+
+          log(`[${timestamp}] ✈️ ${flightNum} (${aircraft}) at ${altitude}`, "log-success");
+        });
+        
+      }).catch((err) => {
+        statusNode.innerText = "🔴 DISCONNECTED";
+        statusNode.style.color = "var(--red)";
+        log(`WebSocket Handshake Error: ${err.message}`, "log-error");
+      });
+    });
+
+    // Logging helper tool
+    function log(message, styleClass = "") {
+      const consoleNode = document.getElementById("logConsole");
+      const wrapper = `<span class="log-entry ${styleClass}">${message}</span>`;
+      consoleNode.innerHTML = wrapper + consoleNode.innerHTML;
+    }
+
+    // Passive Service Worker registration for PWA home-screen app criteria matching
+    if ('serviceWorker' in navigator) {
+      const swBlobCode = `self.addEventListener('fetch', function(e){});`;
+      const blobInstance = new Blob([swBlobCode], { type: 'application/javascript' });
+      navigator.serviceWorker.register(URL.createObjectURL(blobInstance)).catch(() => {});
+    }
+  </script>
+</body>
+</html>
